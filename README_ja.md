@@ -37,9 +37,17 @@ sudo reboot
 sudo /usr/bin/python3 /usr/local/bin/mhs35_calibrate.py
 ```
 
-画面に表示される十字マークを順番にタッチします。
+画面に表示される9個の十字マークを順番にタッチします。
 
-補正値を保存したら、Raspberry Piを再起動してください。
+測定が完了すると、以下の確認メッセージが表示されます。
+
+```text
+Save calibration rule? [y/N]:
+```
+
+`y`を入力してEnterキーを押すと、補正値が保存されます。
+
+保存後、Raspberry Piを再起動してください。
 
 ## 注意事項
 
