@@ -1,0 +1,14 @@
+[Unit]
+Description=Mirror Wayland Desktop to SPI LCD
+After=lightdm.service
+Wants=lightdm.service
+
+[Service]
+Type=simple
+ExecStartPre=/bin/sleep 10
+ExecStart=/usr/local/bin/spi-mirror.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=graphical.target
