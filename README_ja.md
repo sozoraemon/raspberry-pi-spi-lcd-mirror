@@ -50,7 +50,11 @@ sudo /usr/bin/python3 /usr/local/bin/mhs35_calibrate.py
 
 ## 謝辞
 
-本プロジェクトで使用しているMHS35用デバイスツリーオーバーレイ（mhs35.dtbo）は、Robinbinu/pi5-mhs35-touchscreenで公開されているものです。
+本プロジェクトで使用しているMHS35用デバイスツリーオーバーレイ（mhs35.dtbo）は、以下のプロジェクトで公開されているものです。
+
+**Robinbinu / pi5-mhs35-touchscreen**
+
+https://github.com/Robinbinu/pi5-mhs35-touchscreen
 
 Raspberry Pi 5でMHS35を動作させるための技術情報と成果物を公開してくださったRobinbinu氏に感謝いたします。
 
