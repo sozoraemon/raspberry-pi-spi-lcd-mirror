@@ -63,6 +63,25 @@ Press Enter to reboot and apply the changes.
 
 All four orientations have been tested successfully, including touchscreen operation.
 
+## Screen Resolution
+
+The MHS35 LCD has a resolution of 480 × 320, but the default desktop resolution is 1920 × 1080. Since the desktop is scaled down to fit the LCD, text and icons appear very small.
+
+We recommend changing the desktop resolution to **960 × 640**. This maintains the same aspect ratio (3:2) as the LCD, preventing image distortion while making text and icons easier to see.
+
+Run the following commands to automatically apply this resolution at startup:
+
+```bash
+mkdir -p ~/.config/labwc
+echo '( sleep 3; wlr-randr --output NOOP-1 --custom-mode 960x640 ) &' >> ~/.config/labwc/autostart
+```
+
+After configuring the resolution, reboot your Raspberry Pi:
+
+```bash
+sudo reboot
+```
+
 ## Touchscreen Calibration
 
 If the touch position does not match where you tap, run the nine-point calibration tool:
