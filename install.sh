@@ -207,7 +207,7 @@ backup /usr/local/bin/spi-rotate
 
 install -m 755 \
     "$BASE_DIR/spi-rotate" \
-    /usr/local/bin/spi-rotate    
+    /usr/local/bin/spi-rotate
 
 # Replace the default pi/UID 1000 settings with the
 # actual desktop user's name and UID.
