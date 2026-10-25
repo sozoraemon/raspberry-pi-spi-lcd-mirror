@@ -33,7 +33,7 @@ CMDLINE=/boot/firmware/cmdline.txt
     exit 1
 }
 
-for f in mhs35.dtbo spi-mirror.sh spi-mirror.service mhs35_calibrate.py; do
+for f in mhs35.dtbo spi-mirror.sh spi-mirror.service mhs35_calibrate.py spi-rotate; do
     [[ -f "$BASE_DIR/$f" ]] || {
         echo "Missing: $BASE_DIR/$f" >&2
         exit 1
@@ -201,6 +201,13 @@ echo '[4/8] Installing mirroring script and service'
 install -m 755 \
     "$BASE_DIR/spi-mirror.sh" \
     /usr/local/bin/spi-mirror.sh
+
+# Install screen rotation tool
+backup /usr/local/bin/spi-rotate
+
+install -m 755 \
+    "$BASE_DIR/spi-rotate" \
+    /usr/local/bin/spi-rotate    
 
 # Replace the default pi/UID 1000 settings with the
 # actual desktop user's name and UID.
