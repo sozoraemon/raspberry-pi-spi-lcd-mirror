@@ -31,6 +31,38 @@ sudo reboot
 
 Once the Raspberry Pi restarts, the desktop will be mirrored to the SPI LCD.
 
+## Screen Rotation
+
+Use the `spi-rotate` command to rotate the SPI LCD to 0°, 90°, 180°, or 270°.
+
+```bash
+sudo spi-rotate 0
+sudo spi-rotate 90
+sudo spi-rotate 180
+sudo spi-rotate 270
+```
+
+The command automatically adjusts the display orientation, resolution, and touchscreen calibration.
+
+| Rotation | Resolution |
+|---|---|
+| 0° | 320 × 480 |
+| 90° | 480 × 320 |
+| 180° | 320 × 480 |
+| 270° | 480 × 320 |
+
+The default orientation is 270°.
+
+After running the command, the following prompt appears:
+
+```text
+Reboot now? [Y/n]:
+```
+
+Press Enter to reboot and apply the changes.
+
+All four orientations have been tested successfully, including touchscreen operation.
+
 ## Touchscreen Calibration
 
 If the touch position does not match where you tap, run the nine-point calibration tool:
