@@ -1,12 +1,14 @@
 [Unit]
-Description=Mirror Wayland Desktop to SPI LCD
+Description=Mirror Wayland Desktop to SPI LCD (DMA-BUF)
 After=lightdm.service
 Wants=lightdm.service
 
 [Service]
 Type=simple
 ExecStartPre=/bin/sleep 10
-ExecStart=/usr/local/bin/spi-mirror.sh
+Environment=XDG_RUNTIME_DIR=/run/user/@USER_UID@
+Environment=WAYLAND_DISPLAY=wayland-0
+ExecStart=/usr/local/bin/spi-mirror-dmabuf
 Restart=always
 RestartSec=5
 
