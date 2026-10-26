@@ -111,6 +111,28 @@ FPS: 20.0
 FPS: 20.0
 FPS: 19.9
 ```
+## Changing the Desktop Resolution
+
+The MHS35 LCD has a resolution of 480×320, while the Raspberry Pi desktop is initially configured at 1920×1080.
+
+When the entire desktop is scaled down to fit the small LCD, text and icons can become extremely small.
+
+For better readability, we recommend changing the Raspberry Pi desktop resolution to **960×640**.
+
+This resolution has the same 3:2 aspect ratio as the LCD, preventing image distortion and making text and icons easier to see.
+
+Run the following commands to configure the resolution automatically at startup.
+
+```bash
+mkdir -p ~/.config/labwc
+echo '( sleep 3; wlr-randr --output NOOP-1 --custom-mode 960x640 ) &' >> ~/.config/labwc/autostart
+```
+
+Reboot your Raspberry Pi to apply the changes.
+
+```bash
+sudo reboot
+```
 
 ## Display Rotation
 
@@ -143,29 +165,6 @@ Reboot now? [Y/n]:
 Press Enter to reboot and apply the changes.
 
 Display output and touch input have been tested successfully in all four orientations.
-
-## Changing the Desktop Resolution
-
-The MHS35 LCD has a resolution of 480×320, while the Raspberry Pi desktop is initially configured at 1920×1080.
-
-When the entire desktop is scaled down to fit the small LCD, text and icons can become extremely small.
-
-For better readability, we recommend changing the Raspberry Pi desktop resolution to **960×640**.
-
-This resolution has the same 3:2 aspect ratio as the LCD, preventing image distortion and making text and icons easier to see.
-
-Run the following commands to configure the resolution automatically at startup.
-
-```bash
-mkdir -p ~/.config/labwc
-echo '( sleep 3; wlr-randr --output NOOP-1 --custom-mode 960x640 ) &' >> ~/.config/labwc/autostart
-```
-
-Reboot your Raspberry Pi to apply the changes.
-
-```bash
-sudo reboot
-```
 
 ## Touchscreen Calibration
 
