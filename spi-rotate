@@ -10,7 +10,6 @@ from datetime import datetime
 
 CONFIG = Path("/boot/firmware/config.txt")
 RULE = Path("/etc/udev/rules.d/99-ads7846-calibration.rules")
-MIRROR = Path("/usr/local/bin/spi-mirror.sh")
 
 CALIBRATION = {
     270: "0.000462 1.092691 -0.053591 -1.112591 0.000905 1.062629",
@@ -29,26 +28,21 @@ def main():
     angle = int(sys.argv[1])
     width, height = (320, 480) if angle in (0, 180) else (480, 320)
 
-    for path in (CONFIG, RULE, MIRROR):
+    for path in (CONFIG, RULE):
         if not path.is_file():
             sys.exit(f"File not found: {path}")
 
     config = CONFIG.read_text()
     rule = RULE.read_text()
-    mirror = MIRROR.read_text()
 
     config_pattern = r"(?m)^(\s*dtoverlay=mhs35:rotate=)(0|90|180|270)(,speed=\d+\s*)$"
     rule_pattern = r'ENV\{LIBINPUT_CALIBRATION_MATRIX\}="[^"]+"'
-    scale_pattern = r"scale=\d+:\d+:flags=fast_bilinear"
 
     if len(re.findall(config_pattern, config)) != 1:
         sys.exit("Error: Expected exactly one MHS35 rotation setting.")
 
     if len(re.findall(rule_pattern, rule)) != 1:
         sys.exit("Error: Expected exactly one calibration matrix.")
-
-    if len(re.findall(scale_pattern, mirror)) != 1:
-        sys.exit("Error: Expected exactly one ffmpeg scale setting.")
 
     new_config = re.sub(
         config_pattern,
@@ -62,24 +56,17 @@ def main():
         rule
     )
 
-    new_mirror = re.sub(
-        scale_pattern,
-        f"scale={width}:{height}:flags=fast_bilinear",
-        mirror
-    )
-
-    if (new_config, new_rule, new_mirror) == (config, rule, mirror):
+    if (new_config, new_rule) == (config, rule):
         print(f"Already configured for {angle} degrees.")
         return
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 
-    for path in (CONFIG, RULE, MIRROR):
+    for path in (CONFIG, RULE):
         shutil.copy2(path, str(path) + f".bak-{stamp}")
 
     CONFIG.write_text(new_config)
     RULE.write_text(new_rule)
-    MIRROR.write_text(new_mirror)
 
     print(f"Rotation set to {angle} degrees.")
     print(f"Resolution: {width}x{height}")
