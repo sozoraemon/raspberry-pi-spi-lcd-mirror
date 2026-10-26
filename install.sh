@@ -2,140 +2,425 @@
 set -Eeuo pipefail
 
 # Raspberry Pi 5 + MHS35 SPI LCD: Wayland DMA-BUF mirror installer
-[[ $EUID -eq 0 ]] || { echo 'Run with: sudo bash install.sh' >&2; exit 1; }
+
+[[ $EUID -eq 0 ]] || {
+    echo 'Run with: sudo bash install.sh' >&2
+    exit 1
+}
+
 BASE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
 USER_NAME="${SUDO_USER:-}"
-[[ -n "$USER_NAME" && "$USER_NAME" != root ]] || { echo 'Run from the desktop user account using sudo.' >&2; exit 1; }
+
+[[ -n "$USER_NAME" && "$USER_NAME" != root ]] || {
+    echo 'Run from the desktop user account using sudo.' >&2
+    exit 1
+}
+
 USER_UID="$(id -u "$USER_NAME")"
 USER_HOME="$(getent passwd "$USER_NAME" | cut -d: -f6)"
 USER_GROUP="$(id -gn "$USER_NAME")"
+
 CONFIG=/boot/firmware/config.txt
 CMDLINE=/boot/firmware/cmdline.txt
-[[ -f "$CONFIG" && -f "$CMDLINE" ]] || { echo 'Raspberry Pi OS boot configuration not found.' >&2; exit 1; }
-for f in mhs35.dtbo mhs35_calibrate.py spi-rotate spi-mirror.service spi-mirror-dmabuf.c build-spi-mirror-dmabuf.sh; do
-    [[ -f "$BASE_DIR/$f" ]] || { echo "Missing: $BASE_DIR/$f" >&2; exit 1; }
+
+[[ -f "$CONFIG" && -f "$CMDLINE" ]] || {
+    echo 'Raspberry Pi OS boot configuration not found.' >&2
+    exit 1
+}
+
+# Check required files
+for f in \
+    mhs35.dtbo \
+    mhs35_calibrate.py \
+    spi-rotate \
+    spi-mirror.service \
+    spi-mirror-dmabuf.c \
+    build-spi-mirror-dmabuf.sh
+do
+    [[ -f "$BASE_DIR/$f" ]] || {
+        echo "Missing: $BASE_DIR/$f" >&2
+        exit 1
+    }
 done
-if [[ -e /proc/device-tree/model ]] && ! grep -q 'Raspberry Pi 5' /proc/device-tree/model; then
+
+# Check Raspberry Pi model
+if [[ -e /proc/device-tree/model ]] && \
+   ! grep -q 'Raspberry Pi 5' /proc/device-tree/model; then
+
     echo 'Warning: Only Raspberry Pi 5 has been tested.'
+
     read -r -p 'Continue? [y/N] ' reply
+
     [[ "$reply" =~ ^[Yy]$ ]] || exit 1
 fi
+
+# Backup function
 STAMP="$(date +%Y%m%d-%H%M%S)"
-backup() { [[ ! -e "$1" ]] || cp -a -- "$1" "$1.bak-$STAMP"; }
+
+backup() {
+    [[ ! -e "$1" ]] || cp -a -- "$1" "$1.bak-$STAMP"
+}
+
+
+# =========================================================
+# 1. Install dependencies
+# =========================================================
 
 echo '[1/8] Installing DMA-BUF build and touchscreen dependencies'
+
 apt-get update
-apt-get install -y gcc pkg-config libwayland-dev libwayland-bin libdrm-dev \
-    librust-wayland-protocols-wlr-dev python3-evdev python3-pil
+
+apt-get install -y \
+    gcc \
+    pkg-config \
+    libwayland-dev \
+    libwayland-bin \
+    libdrm-dev \
+    librust-wayland-protocols-wlr-dev \
+    python3-evdev \
+    python3-pil \
+    wlr-randr
+
+
+# =========================================================
+# 2. Install device-tree overlay
+# =========================================================
 
 echo '[2/8] Installing device-tree overlay'
+
 install -d /boot/firmware/overlays
+
 backup /boot/firmware/overlays/mhs35.dtbo
-install -m 644 "$BASE_DIR/mhs35.dtbo" /boot/firmware/overlays/mhs35.dtbo
+
+install -m 644 \
+    "$BASE_DIR/mhs35.dtbo" \
+    /boot/firmware/overlays/mhs35.dtbo
+
+
+# =========================================================
+# 3. Update boot configuration
+# =========================================================
 
 echo '[3/8] Updating boot configuration'
+
 backup "$CONFIG"
 backup "$CMDLINE"
+
 python3 - "$CONFIG" "$CMDLINE" <<'PY'
+
 from pathlib import Path
 import sys
+
 config, cmdline = map(Path, sys.argv[1:])
+
 lines = config.read_text().splitlines()
+
 required = [
     'dtoverlay=vc4-kms-v3d',
     'max_framebuffers=2',
     'dtoverlay=nospi10',
     'dtparam=spi=on',
-    'dtoverlay=mhs35:rotate=270,speed=24000000',
 ]
-active = [s for line in lines if (s := line.strip()) and not s.startswith('#')]
+
+active = [
+    s
+    for line in lines
+    if (s := line.strip()) and not s.startswith('#')
+]
+
+# Check existing settings
 for item in required:
+
     key, value = item.split('=', 1)
+
     if key == 'dtoverlay':
+
         name = value.split(':', 1)[0]
-        existing = [s for s in active if s.startswith('dtoverlay=') and s.split('=', 1)[1].split(':', 1)[0] == name]
+
+        existing = [
+            s for s in active
+            if s.startswith('dtoverlay=')
+            and s.split('=', 1)[1].split(':', 1)[0] == name
+        ]
+
     elif key == 'dtparam':
+
         param_name = value.split('=', 1)[0]
-        existing = [s for s in active if s.startswith('dtparam=') and s.split('=', 1)[1].split('=', 1)[0] == param_name]
+
+        existing = [
+            s for s in active
+            if s.startswith('dtparam=')
+            and s.split('=', 1)[1].split('=', 1)[0] == param_name
+        ]
+
     else:
-        existing = [s for s in active if s.startswith(key + '=')]
+
+        existing = [
+            s for s in active
+            if s.startswith(key + '=')
+        ]
+
     if existing and item not in existing:
-        raise SystemExit(f'Conflicting setting for {item}: {existing}. Check config.txt manually.')
-missing = [item for item in required if item not in active]
+
+        raise SystemExit(
+            f'Conflicting setting for {item}: {existing}. '
+            'Check config.txt manually.'
+        )
+
+
+# Preserve existing MHS35 rotation settings
+mhs35_settings = [
+    s for s in active
+    if s.startswith('dtoverlay=mhs35:')
+    or s == 'dtoverlay=mhs35'
+]
+
+if not mhs35_settings:
+
+    required.append(
+        'dtoverlay=mhs35:rotate=270,speed=24000000'
+    )
+
+elif len(mhs35_settings) > 1:
+
+    raise SystemExit(
+        'Multiple MHS35 overlay settings found. '
+        'Check config.txt manually.'
+    )
+
+
+# Add missing settings
+missing = [
+    item for item in required
+    if item not in active
+]
+
 if missing:
-    if lines and lines[-1].strip(): lines.append('')
+
+    if lines and lines[-1].strip():
+        lines.append('')
+
     lines.extend(['[all]', *missing])
+
     config.write_text('\n'.join(lines) + '\n')
-args = [x for x in cmdline.read_text().strip().split() if not x.startswith('vt.global_cursor_default=')]
+
+
+# Hide console cursor
+args = [
+    x for x in cmdline.read_text().strip().split()
+    if not x.startswith('vt.global_cursor_default=')
+]
+
 args.append('vt.global_cursor_default=0')
+
 cmdline.write_text(' '.join(args) + '\n')
+
 PY
 
+
+# =========================================================
+# 4. Build and install DMA-BUF mirror
+# =========================================================
+
 echo '[4/8] Building and installing DMA-BUF mirror and service'
+
 (
     cd "$BASE_DIR"
     bash ./build-spi-mirror-dmabuf.sh
 )
+
+# Install mirror executable
 backup /usr/local/bin/spi-mirror-dmabuf
-install -m 755 "$BASE_DIR/spi-mirror-dmabuf" /usr/local/bin/spi-mirror-dmabuf
+
+install -m 755 \
+    "$BASE_DIR/spi-mirror-dmabuf" \
+    /usr/local/bin/spi-mirror-dmabuf
+
+
+# Install rotation command
 backup /usr/local/bin/spi-rotate
-install -m 755 "$BASE_DIR/spi-rotate" /usr/local/bin/spi-rotate
+
+install -m 755 \
+    "$BASE_DIR/spi-rotate" \
+    /usr/local/bin/spi-rotate
+
+
+# Install touchscreen calibration program
 backup /usr/local/bin/mhs35_calibrate.py
-install -m 755 "$BASE_DIR/mhs35_calibrate.py" /usr/local/bin/mhs35_calibrate.py
+
+install -m 755 \
+    "$BASE_DIR/mhs35_calibrate.py" \
+    /usr/local/bin/mhs35_calibrate.py
+
+
+# Install systemd service
 backup /etc/systemd/system/spi-mirror.service
-install -m 644 "$BASE_DIR/spi-mirror.service" /etc/systemd/system/spi-mirror.service
-sed -i "s|@USER_UID@|$USER_UID|g" /etc/systemd/system/spi-mirror.service
+
+install -m 644 \
+    "$BASE_DIR/spi-mirror.service" \
+    /etc/systemd/system/spi-mirror.service
+
+sed -i \
+    "s|@USER_UID@|$USER_UID|g" \
+    /etc/systemd/system/spi-mirror.service
+
+
+# =========================================================
+# 5. Configure labwc touchscreen mapping
+# =========================================================
 
 echo '[5/8] Configuring labwc touchscreen mapping'
+
 LABWC="$USER_HOME/.config/labwc/rc.xml"
-install -d -o "$USER_NAME" -g "$USER_GROUP" "$(dirname "$LABWC")"
+
+install -d \
+    -o "$USER_NAME" \
+    -g "$USER_GROUP" \
+    "$(dirname "$LABWC")"
+
 backup "$LABWC"
+
 python3 - "$LABWC" <<'PY'
+
 from pathlib import Path
 import sys
 import xml.etree.ElementTree as ET
+
 p = Path(sys.argv[1])
+
 if p.exists():
+
     tree = ET.parse(p)
     root = tree.getroot()
+
 else:
-    root = ET.Element('openbox_config', {'xmlns': 'http://openbox.org/3.4/rc'})
+
+    root = ET.Element(
+        'openbox_config',
+        {'xmlns': 'http://openbox.org/3.4/rc'}
+    )
+
     tree = ET.ElementTree(root)
+
+
 if root.tag.split('}')[-1] != 'openbox_config':
-    raise SystemExit('Unexpected labwc rc.xml format; no changes made.')
-for node in list(root):
-    if node.tag.split('}')[-1] == 'touch' and node.get('deviceName') == 'ADS7846 Touchscreen':
-        root.remove(node)
-ns = root.tag.split('}')[0][1:] if root.tag.startswith('{') else ''
-name = f'{{{ns}}}touch' if ns else 'touch'
-ET.SubElement(root, name, {'deviceName': 'ADS7846 Touchscreen', 'mapToOutput': 'NOOP-1', 'mouseEmulation': 'yes'})
-if ns: ET.register_namespace('', ns)
+
+    raise SystemExit(
+        'Unexpected labwc rc.xml format; no changes made.'
+    )
+
+
+# Determine XML namespace
+ns = (
+    root.tag.split('}')[0][1:]
+    if root.tag.startswith('{')
+    else ''
+)
+
+touch_tag = f'{{{ns}}}touch' if ns else 'touch'
+
+
+# Find existing touchscreen configuration
+touch = None
+
+for node in root:
+
+    if (
+        node.tag.split('}')[-1] == 'touch'
+        and node.get('deviceName') == 'ADS7846 Touchscreen'
+    ):
+
+        if touch is None:
+            touch = node
+        else:
+            root.remove(node)
+
+
+# Add touchscreen configuration if missing
+if touch is None:
+
+    touch = ET.SubElement(
+        root,
+        touch_tag
+    )
+
+
+# Update touchscreen mapping
+touch.set('deviceName', 'ADS7846 Touchscreen')
+touch.set('mapToOutput', 'NOOP-1')
+touch.set('mouseEmulation', 'yes')
+
+
+# Save XML
+if ns:
+    ET.register_namespace('', ns)
+
 ET.indent(tree, space='  ')
-tree.write(p, encoding='unicode', xml_declaration=True)
+
+tree.write(
+    p,
+    encoding='unicode',
+    xml_declaration=True
+)
+
 PY
+
 chown "$USER_NAME:$USER_GROUP" "$LABWC"
 
+
+# =========================================================
+# 6. Install touchscreen calibration
+# =========================================================
+
 echo '[6/8] Installing touchscreen calibration'
+
 RULE=/etc/udev/rules.d/99-ads7846-calibration.rules
+
 backup "$RULE"
+
 cat > "$RULE" <<'RULE_EOF'
 ACTION=="add|change", SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="ADS7846 Touchscreen", ENV{LIBINPUT_CALIBRATION_MATRIX}="0.000462 1.092691 -0.053591 -1.112591 0.000905 1.062629"
 RULE_EOF
+
 chmod 644 "$RULE"
 
+
+# =========================================================
+# 7. Enable systemd service
+# =========================================================
+
 echo '[7/8] Enabling mirror service'
+
 systemctl daemon-reload
+
 systemctl enable spi-mirror.service
 
+
+# =========================================================
+# 8. Installation completed
+# =========================================================
+
 echo '[8/8] Installation completed'
+
 cat <<'MESSAGE'
+
+Installation completed successfully.
 
 Reboot to apply the settings:
   sudo reboot
 
-After reboot:
+After reboot, check the mirror service:
   systemctl status spi-mirror.service
+
+To monitor the frame rate:
   journalctl -u spi-mirror.service -f
+
+To rotate the display:
+  sudo spi-rotate 0
+  sudo spi-rotate 90
+  sudo spi-rotate 180
+  sudo spi-rotate 270
 
 For touchscreen calibration:
   sudo /usr/bin/python3 /usr/local/bin/mhs35_calibrate.py
@@ -145,5 +430,7 @@ Notes:
 - Mirrored output: NOOP-1
 - Mirror engine: C / DMA-BUF (20 FPS)
 - Existing configuration files are backed up.
+- Existing display rotation settings are preserved.
 - Only Raspberry Pi 5 has been tested.
+
 MESSAGE
