@@ -35,7 +35,6 @@ Raspberry Pi 5での実測結果です。
 | ミラーリング元の解像度 | 960×640 |
 | SPI液晶の解像度 | 480×320 |
 | 画面表示 | 約20FPS |
-| CPU温度 | 75.2～78.5℃ |
 | 平均CPU温度 | 約76.8℃ |
 | CPU周波数制限 | なし |
 
@@ -116,12 +115,6 @@ sudo journalctl -u spi-mirror -f
 FPS: 20.0
 FPS: 20.0
 FPS: 19.9
-```
-
-CPU温度は以下のコマンドで確認できます。
-
-```bash
-vcgencmd measure_temp
 ```
 
 ## 画面の回転
