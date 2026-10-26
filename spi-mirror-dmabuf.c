@@ -3,6 +3,7 @@
 #include "wlr-export-dmabuf-unstable-v1-client-protocol.h"
 #include <drm_fourcc.h>
 #include <linux/dma-buf.h>
+#include <linux/fb.h>
 #include <sys/ioctl.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -15,11 +16,10 @@
 #include <time.h>
 #include <unistd.h>
 
-#define OUT_W 480
-#define OUT_H 320
 #define OUTPUT_NAME "NOOP-1"
 #define FB_DEVICE "/dev/fb0"
-#define FRAME_BYTES (OUT_W * OUT_H * 2)
+static int out_w, out_h;
+static size_t frame_bytes;
 
 static struct wl_display *display;
 static struct zwlr_export_dmabuf_manager_v1 *manager;
@@ -163,16 +163,16 @@ static inline void get_rgb(const struct capture *c, int x, int y,
     }
 }
 
-/* Bilinear scale to 480x320, pack little-endian RGB565. */
+/* Bilinear scale to framebuffer dimensions, pack little-endian RGB565. */
 static void convert_frame(const struct capture *c, uint8_t *dst) {
-    for (int y = 0; y < OUT_H; ++y) {
-        int fy = (int)(((int64_t)(2*y+1) * c->height * 128) / OUT_H) - 128;
+    for (int y = 0; y < out_h; ++y) {
+        int fy = (int)(((int64_t)(2*y+1) * c->height * 128) / out_h) - 128;
         int y0 = fy >> 8, wy = fy & 255;
         if (y0 < 0) { y0 = 0; wy = 0; }
         if (y0 >= (int)c->height - 1) { y0 = (int)c->height - 1; wy = 0; }
         int y1 = y0 + (y0 < (int)c->height - 1);
-        for (int x = 0; x < OUT_W; ++x) {
-            int fx = (int)(((int64_t)(2*x+1) * c->width * 128) / OUT_W) - 128;
+        for (int x = 0; x < out_w; ++x) {
+            int fx = (int)(((int64_t)(2*x+1) * c->width * 128) / out_w) - 128;
             int x0 = fx >> 8, wx = fx & 255;
             if (x0 < 0) { x0 = 0; wx = 0; }
             if (x0 >= (int)c->width - 1) { x0 = (int)c->width - 1; wx = 0; }
@@ -188,7 +188,7 @@ static void convert_frame(const struct capture *c, uint8_t *dst) {
             int g=(g00*w00+g10*w10+g01*w01+g11*w11+32768)>>16;
             int b=(b00*w00+b10*w10+b01*w01+b11*w11+32768)>>16;
             uint16_t rgb565 = (uint16_t)(((r & 0xf8)<<8) | ((g & 0xfc)<<3) | (b>>3));
-            size_t pos = ((size_t)y*OUT_W+x)*2;
+            size_t pos = ((size_t)y*out_w+x)*2;
             dst[pos] = (uint8_t)rgb565;
             dst[pos+1] = (uint8_t)(rgb565 >> 8);
         }
@@ -198,8 +198,8 @@ static void convert_frame(const struct capture *c, uint8_t *dst) {
 static int write_frame(int fd, const uint8_t *data) {
     if (lseek(fd, 0, SEEK_SET) < 0) { perror("lseek /dev/fb0"); return -1; }
     size_t offset = 0;
-    while (offset < FRAME_BYTES) {
-        ssize_t n = write(fd, data + offset, FRAME_BYTES - offset);
+    while (offset < frame_bytes) {
+        ssize_t n = write(fd, data + offset, frame_bytes - offset);
         if (n < 0 && errno == EINTR) continue;
         if (n <= 0) { perror("write /dev/fb0"); return -1; }
         offset += (size_t)n;
@@ -220,9 +220,25 @@ int main(void) {
     }
     int fb = open(FB_DEVICE, O_WRONLY | O_CLOEXEC);
     if (fb < 0) { perror("open /dev/fb0"); return 1; }
-    uint8_t *out = malloc(FRAME_BYTES);
+    struct fb_var_screeninfo vinfo;
+    struct fb_fix_screeninfo finfo;
+    if (ioctl(fb, FBIOGET_VSCREENINFO, &vinfo) < 0 ||
+        ioctl(fb, FBIOGET_FSCREENINFO, &finfo) < 0) {
+        perror("framebuffer information"); return 1;
+    }
+    out_w = (int)vinfo.xres;
+    out_h = (int)vinfo.yres;
+    if (!((out_w == 480 && out_h == 320) || (out_w == 320 && out_h == 480)) ||
+        vinfo.bits_per_pixel != 16 || finfo.line_length != (unsigned)out_w * 2 ||
+        vinfo.xoffset != 0 || vinfo.yoffset != 0) {
+        fprintf(stderr, "Unsupported framebuffer geometry: %dx%d, %u bpp, stride %u\n",
+                out_w, out_h, vinfo.bits_per_pixel, finfo.line_length);
+        return 1;
+    }
+    frame_bytes = (size_t)out_w * out_h * 2;
+    uint8_t *out = malloc(frame_bytes);
     if (!out) { perror("malloc"); return 1; }
-    fprintf(stderr, "DMA-BUF capturing %s -> %dx%d RGB565 /dev/fb0 (target 20FPS)\n", OUTPUT_NAME, OUT_W, OUT_H);
+    fprintf(stderr, "DMA-BUF capturing %s -> %dx%d RGB565 /dev/fb0 (target 20FPS)\n", OUTPUT_NAME, out_w, out_h);
     double start = seconds_now();
     unsigned frames = 0;
     while (1) {
@@ -254,7 +270,7 @@ int main(void) {
         if (c.fd >= 0) close(c.fd);
         zwlr_export_dmabuf_frame_v1_destroy(frame);
         if (c.permanent) {
-            fprintf(stderr, "DMA-BUF CPU access unsupported or fatal error; existing screencopy version remains available.\n");
+            fprintf(stderr, "DMA-BUF CPU access unsupported or fatal error; stopping mirroring.\n");
             break;
         }
         double elapsed = seconds_now() - start;
@@ -271,3 +287,4 @@ int main(void) {
     wl_display_disconnect(display);
     return 1;
 }
+
