@@ -129,6 +129,17 @@ active = [
     if (s := line.strip()) and not s.startswith('#')
 ]
 
+for i, line in enumerate(lines):
+    if line.strip() == 'dtparam=spi=off':
+        lines[i] = 'dtparam=spi=on'
+        print('SPI setting changed: off -> on')
+
+active = [
+    s
+    for line in lines
+    if (s := line.strip()) and not s.startswith('#')
+]
+
 # Check existing settings
 for item in required:
 
@@ -203,7 +214,7 @@ if missing:
 
     lines.extend(['[all]', *missing])
 
-    config.write_text('\n'.join(lines) + '\n')
+config.write_text('\n'.join(lines) + '\n')
 
 
 # Hide console cursor
