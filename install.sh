@@ -123,12 +123,6 @@ required = [
     'dtparam=spi=on',
 ]
 
-active = [
-    s
-    for line in lines
-    if (s := line.strip()) and not s.startswith('#')
-]
-
 for i, line in enumerate(lines):
     if line.strip() == 'dtparam=spi=off':
         lines[i] = 'dtparam=spi=on'
