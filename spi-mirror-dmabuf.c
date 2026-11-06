@@ -245,7 +245,7 @@ int main(void) {
         double frame_start = seconds_now();
         struct capture c = { .fd = -1 };
         struct zwlr_export_dmabuf_frame_v1 *frame =
-            zwlr_export_dmabuf_manager_v1_capture_output(manager, 0, output);
+            zwlr_export_dmabuf_manager_v1_capture_output(manager, 1, output);
         if (!frame) { fprintf(stderr, "DMA-BUF capture request failed\n"); break; }
         zwlr_export_dmabuf_frame_v1_add_listener(frame, &frame_listener, &c);
         while (c.state == 0) {
