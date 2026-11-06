@@ -44,17 +44,6 @@ do
     }
 done
 
-# Check Raspberry Pi model
-if [[ -e /proc/device-tree/model ]] && \
-   ! grep -q 'Raspberry Pi 5' /proc/device-tree/model; then
-
-    echo 'Warning: Only Raspberry Pi 5 has been tested.'
-
-    read -r -p 'Continue? [y/N] ' reply
-
-    [[ "$reply" =~ ^[Yy]$ ]] || exit 1
-fi
-
 # Backup function
 STAMP="$(date +%Y%m%d-%H%M%S)"
 
@@ -436,6 +425,5 @@ Notes:
 - Mirror engine: C / DMA-BUF (20 FPS)
 - Existing configuration files are backed up.
 - Existing display rotation settings are preserved.
-- Only Raspberry Pi 5 has been tested.
 
 MESSAGE
